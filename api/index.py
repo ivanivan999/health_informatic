@@ -1,50 +1,34 @@
-import sys
-import os
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
 
-# Add the backend directory to Python path
-backend_path = os.path.join(os.path.dirname(__file__), '..', 'backend')
-sys.path.insert(0, backend_path)
+app = FastAPI(title="Patient Informatics AI Assistant")
 
-try:
-    from fastapi import FastAPI
-    from fastapi.middleware.cors import CORSMiddleware
-    from app.core.config import settings
-    from app.routers import chat
-except ImportError as e:
-    # Fallback for import issues
-    print(f"Import error: {e}")
-    from fastapi import FastAPI
-    app = FastAPI()
-    
-    @app.get("/")
-    def fallback():
-        return {"error": "Import failed", "message": str(e)}
-    
-    # Export app
-    def handler(request):
-        return app
-else:
-    app = FastAPI(title="Patient Informatics AI Assistant")
+# Configure CORS
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
 
-    # Configure CORS for Vercel
-    app.add_middleware(
-        CORSMiddleware,
-        allow_origins=["*"],  # Allow all origins for now
-        allow_credentials=True,
-        allow_methods=["*"],
-        allow_headers=["*"],
-    )
+@app.get("/")
+def root():
+    return {"message": "Patient Informatics AI Assistant API", "status": "working"}
 
-    # Include routers with proper prefix
-    app.include_router(chat.router, prefix="/api/v1")
+@app.get("/api")
+def api_root():
+    return {"message": "API is running on Vercel!", "status": "success"}
 
-    @app.get("/")
-    def root():
-        return {"message": "Patient Informatics AI Assistant API"}
+@app.get("/api/test")
+def test_endpoint():
+    return {"test": "success", "deployed": "vercel", "fastapi": "working"}
 
-    @app.get("/api")
-    def api_root():
-        return {"message": "API is running on Vercel!", "status": "success"}
-
-# Vercel handler
-app = app
+# Simple chat endpoint for testing
+@app.post("/api/v1/chat/send")
+def chat_test(message_data: dict):
+    return {
+        "message": f"Echo: {message_data.get('message', 'No message')}",
+        "status": "success",
+        "type": "text"
+    }
