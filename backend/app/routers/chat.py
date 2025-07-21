@@ -96,24 +96,27 @@ def prepare_text_for_audio(formatted_response, text_response, response_length):
 # backend/app/routers/chat.py - Simplified version
 @router.post("/send", response_model=ChatResponse)
 async def send_message(request: ChatRequest, background_tasks: BackgroundTasks):
+    start_time = time.time()
+    print(f"🕐 REQUEST START: {request.message[:50]}...")
     try:
-        print(f"Received message: {request.message}")
-        
-        # Always use the DatabaseAgent - let it handle routing
+        # Step 1: Setup
+        setup_start = time.time()
         patient_id = settings.DEFAULT_PATIENT_ID
-        print(f"Using patient ID: {patient_id}")
+        print(f"⚡ Setup completed in {(time.time() - setup_start)*1000:.0f}ms")
         
-        # Generate response from DatabaseAgent
-        print("Calling DatabaseAgent...")
+        # Step 2: Database Agent Call
+        agent_start = time.time()
+        print("🔍 Starting DatabaseAgent...")
         database_agent = DatabaseAgent(patient_id, settings.GOOGLE_API_KEY, request.message)
         
         # Get response from database agent
         text_response, html_response = database_agent.create_agent()
+        agent_duration = time.time() - agent_start
+        print(f"🏃 DatabaseAgent completed in {agent_duration:.2f}s")
         
-        # Log the response details
+        # Step 3: Response Processing
+        processing_start = time.time()
         response_length = len(text_response) if text_response else 0
-        print(f"Agent response length: {response_length}")
-        print(f"HTML response available: {html_response is not None}")
 
         # Parse the JSON response directly from database agent
         try:
@@ -127,6 +130,9 @@ async def send_message(request: ChatRequest, background_tasks: BackgroundTasks):
                 "html": html_response
             }
 
+        processing_duration = time.time() - processing_start
+        print(f"🛠️ Response processing completed in {processing_duration:.2f}s")
+
         # Generate unique ID for audio file
         session_id = str(int(time.time() * 1000000))
         audio_filename = f"temp_audio_output_{session_id}.mp3"
@@ -137,11 +143,19 @@ async def send_message(request: ChatRequest, background_tasks: BackgroundTasks):
         # Prepare text for audio
         text_for_audio = prepare_text_for_audio(formatted_response, text_response, response_length)
         
-        # Generate audio synchronously and wait for completion
+        # Step 4: Audio Generation
+        audio_start = time.time()
         audio_success = await generate_audio_response_sync(text_for_audio, audio_path)
+        audio_duration = time.time() - audio_start  
         
         # Only provide audio URL if generation was successful
         audio_url = f"/api/v1/chat/audio/{audio_filename}" if audio_success else None
+
+        # # Step 4: Audio Generation (if enabled)
+        # audio_start = time.time()
+        # audio_url = None  # Skip audio for now to test speed
+        # audio_duration = time.time() - audio_start
+        # print(f"🔊 Audio processing in {audio_duration*1000:.0f}ms (skipped)")
 
         response = ChatResponse(
             message=text_response,
@@ -153,6 +167,11 @@ async def send_message(request: ChatRequest, background_tasks: BackgroundTasks):
             print(f"Returning response with audio URL: {audio_url}")
         else:
             print("Returning response without audio due to generation failure")
+
+        total_duration = time.time() - start_time
+        print(f"🏁 TOTAL REQUEST TIME: {total_duration:.2f}s")
+        print(f"📊 Breakdown: Agent={agent_duration:.2f}s, Processing={processing_duration*1000:.0f}ms, Audio={audio_duration*1000:.0f}ms")
+        
             
         return response
     

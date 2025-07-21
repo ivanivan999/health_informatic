@@ -12,4 +12,4 @@ class ChatRequest(BaseModel):
 class ChatResponse(BaseModel):
     message: str
     formatted_response: Optional[Dict[str, Any]] = None
-    audio_url: str
+    audio_url: Optional[str] = None 

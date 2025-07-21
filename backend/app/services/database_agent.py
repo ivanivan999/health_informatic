@@ -27,18 +27,30 @@ class DatabaseAgent:
         self.question = question
 
     def connect_db(self):
+        db_start = time.time()
         mysql_uri = f"mysql+pymysql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
-        return SQLDatabase.from_uri(mysql_uri)
+        db = SQLDatabase.from_uri(mysql_uri)
+        db_duration = time.time() - db_start
+        print(f"🗄️ Database connection in {db_duration*1000:.0f}ms")
+        return db
 
     def create_agent(self):
+        agent_start = time.time()
+        print(f"🤖 DatabaseAgent: Starting initialization...")
+
+        # Step 1: LLM Setup
+        llm_start = time.time()
         # call gemini model
         llm = ChatGoogleGenerativeAI(model='gemini-2.5-flash',
-                                    verbose=True,
-                                    temperature=0.3,
+                                    verbose=False,  # Disable verbose
+                                    temperature=0.1,  # Lower = faster
+                                    # max_tokens=1000,  # Limit output
                                     google_api_key=self.gemini_key)
         db = self.connect_db()
-        
-        # Create the SQLDatabaseToolkit with the database and LLM
+        print(f"⚡ LLM setup in {(time.time() - llm_start)*1000:.0f}ms")
+    
+        # Step 2: Toolkit Setup
+        toolkit_start = time.time()
         toolkit = SQLDatabaseToolkit(db=db, llm=llm)
         # Create the agent with the tools
         tools = toolkit.get_tools()
@@ -46,6 +58,8 @@ class DatabaseAgent:
         get_schema_node = ToolNode([get_schema_tool], name="get_schema")
         run_query_tool = next(tool for tool in tools if tool.name == "sql_db_query")
         run_query_node = ToolNode([run_query_tool], name="run_query")
+        print(f"⚡ Toolkit setup in {(time.time() - toolkit_start)*1000:.0f}ms")
+    
 
         # Enhanced MessagesState to include schema info
         class EnhancedMessagesState(MessagesState):
@@ -55,57 +69,61 @@ class DatabaseAgent:
             executed_query: str = ""
 
         # Route the query to the appropriate chain
+        # def determine_query_type(state: EnhancedMessagesState):
+        #     """Determine if the query is about patients or not."""
+        #     print("🚀 STEP 1: Determining query type")
+            
+        #     messages = state["messages"]
+        #     last_message = messages[-1]
+        #     query = last_message.content
+            
+        #     print(f"📝 User query: '{query}'")
+            
+        #     # Enhanced routing prompt
+        #     system_route_prompt = """You are a Health Informatics AI routing system. 
+
+        #     Analyze the user query and classify it into one of these categories:
+
+        #     1. Return "greeting" if the query is:
+        #     - Greetings (hello, hi, good morning, etc.)
+        #     - Farewells (goodbye, bye, see you later, etc.)
+        #     - Courtesy questions (how are you, thanks, etc.)
+        #     - General help requests (what can you do, who are you, help, etc.)
+
+        #     2. Return "list_tables" if the query is asking for:
+        #     - Patient treatment history, medications, or therapies
+        #     - Pathology results, lab results, or diagnostic reports  
+        #     - Patient registration details, contact info, or demographics
+        #     - Medical records, health data, or clinical information
+        #     - Specific patient data by ID or condition
+
+        #     3. Return "other" for any other queries that don't fit the above categories.
+
+        #     Query: "{query}"
+            
+        #     Respond with only one word: "greeting", "list_tables", or "other"
+        #     """
+
+        #     system_message = {
+        #         "role": "system",
+        #         "content": system_route_prompt,
+        #     }
+
+        #     response = llm.invoke([system_message, {"role": "user", "content": query}])
+            
+        #     if "list_tables" in response.content:
+        #         print("✅ Query classified as: PATIENT INFORMATION")
+        #         return {"messages": [AIMessage("list_tables")]}
+        #     elif "greeting" in response.content.lower():
+        #         print("✅ Query classified as: GREETING/GENERAL")
+        #         return {"messages": [AIMessage("greeting")]}
+        #     else:
+        #         print("❌ Query classified as: NON-PATIENT")
+        #         return {"messages": [AIMessage("other")]}
+
         def determine_query_type(state: EnhancedMessagesState):
-            """Determine if the query is about patients or not."""
-            print("🚀 STEP 1: Determining query type")
-            
-            messages = state["messages"]
-            last_message = messages[-1]
-            query = last_message.content
-            
-            print(f"📝 User query: '{query}'")
-            
-            # Enhanced routing prompt
-            system_route_prompt = """You are a Health Informatics AI routing system. 
-
-            Analyze the user query and classify it into one of these categories:
-
-            1. Return "greeting" if the query is:
-            - Greetings (hello, hi, good morning, etc.)
-            - Farewells (goodbye, bye, see you later, etc.)
-            - Courtesy questions (how are you, thanks, etc.)
-            - General help requests (what can you do, who are you, help, etc.)
-
-            2. Return "list_tables" if the query is asking for:
-            - Patient treatment history, medications, or therapies
-            - Pathology results, lab results, or diagnostic reports  
-            - Patient registration details, contact info, or demographics
-            - Medical records, health data, or clinical information
-            - Specific patient data by ID or condition
-
-            3. Return "other" for any other queries that don't fit the above categories.
-
-            Query: "{query}"
-            
-            Respond with only one word: "greeting", "list_tables", or "other"
-            """
-
-            system_message = {
-                "role": "system",
-                "content": system_route_prompt,
-            }
-
-            response = llm.invoke([system_message, {"role": "user", "content": query}])
-            
-            if "list_tables" in response.content:
-                print("✅ Query classified as: PATIENT INFORMATION")
-                return {"messages": [AIMessage("list_tables")]}
-            elif "greeting" in response.content.lower():
-                print("✅ Query classified as: GREETING/GENERAL")
-                return {"messages": [AIMessage("greeting")]}
-            else:
-                print("❌ Query classified as: NON-PATIENT")
-                return {"messages": [AIMessage("other")]}
+            """Skip classification - assume all queries are patient data queries"""
+            return {"messages": [AIMessage("list_tables")]}
 
         def route_query(state: EnhancedMessagesState) -> Literal[END, "list_tables","handle_greeting"]:
             """Route the query to the appropriate tool based on the last message."""
@@ -404,13 +422,16 @@ class DatabaseAgent:
             
             return {"messages": messages}
 
+        # def should_continue(state: EnhancedMessagesState) -> Literal["check_query", "run_query_with_schema"]:
+        #     messages = state["messages"]
+        #     last_message = messages[-1]
+        #     if not last_message.tool_calls:
+        #         return "run_query_with_schema"
+        #     else:
+        #         return "check_query"
         def should_continue(state: EnhancedMessagesState) -> Literal["check_query", "run_query_with_schema"]:
-            messages = state["messages"]
-            last_message = messages[-1]
-            if not last_message.tool_calls:
-                return "run_query_with_schema"
-            else:
-                return "check_query"
+            # Skip validation step entirely
+            return "run_query_with_schema"
 
         def should_continue_after_query(state: EnhancedMessagesState) -> Literal[END, "format_query_results"]:
             """Decide what to do after running the query"""
@@ -618,17 +639,31 @@ class DatabaseAgent:
         builder.add_edge("format_query_results", END)
 
         print("🏗️ Building agent graph...")
+        graph_start = time.time()
         agent = builder.compile()
+        print(f"⚡ Graph built in {(time.time() - graph_start)*1000:.0f}ms")
+    
         
         print("🚀 Starting agent execution...")
+        execution_start = time.time()
         final_state = None
+        step_count = 0
+
         for step in agent.stream(
             {"messages": [{"role": "user", "content": self.question}]},
             stream_mode="values",
         ):
+            step_count += 1
             final_state = step
-            step["messages"][-1].pretty_print()
-            
+            print(f"📝 Step {step_count}: {step['messages'][-1].__class__.__name__}")
+            # Remove the pretty_print for speed
+            # step["messages"][-1].pretty_print()
+
+        execution_duration = time.time() - execution_start
+        total_duration = time.time() - agent_start
+        print(f"🏃 Agent execution in {execution_duration:.2f}s ({step_count} steps)")
+        print(f"🏁 Total DatabaseAgent time: {total_duration:.2f}s")
+
         # Return formatted result based on type
         final_message = final_state["messages"][-1]
         if hasattr(final_message, 'content'):

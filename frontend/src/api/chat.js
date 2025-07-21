@@ -1,7 +1,8 @@
 import axios from 'axios';
 
-// Use environment variable or default to relative path for Vercel
-const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || '/api/v1';
+// For Cloud Run deployment - we'll update this with actual backend URL
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 
+  'http://localhost:8000/api/v1'; // Default for local development
 
 console.log('Environment:', import.meta.env.MODE);
 console.log('API Base URL:', API_BASE_URL);
@@ -17,7 +18,7 @@ export const sendMessage = async (message, audioEnabled = false) => {
       headers: {
         'Content-Type': 'application/json',
       },
-      timeout: 30000 // 30 second timeout for Vercel functions
+      timeout: 60000 // 60 second timeout for Cloud Run
     });
 
     return response.data;

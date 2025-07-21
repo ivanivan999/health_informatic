@@ -6,6 +6,12 @@ import AudioPlayer from './AudioPlayer';
 import { sendMessage } from '../api/chat';
 import './ChatContainer.css';
 
+// Add this at the top after imports
+const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || 'http://localhost:8000/api/v1';
+const BACKEND_URL = API_BASE_URL.replace('/api/v1', ''); // Gets base backend URL
+
+
+
 const ChatContainer = () => {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -29,6 +35,7 @@ const ChatContainer = () => {
     }]);
     
     setLoading(true);
+    
     try {
       // Send to API and get response
       const response = await sendMessage(text);
@@ -44,14 +51,27 @@ const ChatContainer = () => {
       // Set audio URL for playback if available
       if (response.audio_url) {
         setTimeout(() => {
-          setCurrentAudio(`http://localhost:8000${response.audio_url}`);
+          setCurrentAudio(`${BACKEND_URL}${response.audio_url}`);
         }, 500);
       }
     } catch (error) {
       console.error('Error getting response:', error);
+      
+      let errorMessage = 'Sorry, I encountered an error processing your request.';
+      
+      if (error.code === 'ECONNABORTED') {
+        errorMessage = '⏰ Request timed out. Please try again with a shorter query.';
+      } else if (error.response) {
+        // Server responded with error status
+        errorMessage = `Server error: ${error.response.status}. Please try again.`;
+      } else if (error.request) {
+        // Network error
+        errorMessage = '🌐 Network error. Please check your connection and try again.';
+      }
+      
       setMessages(prev => [...prev, { 
         role: 'assistant', 
-        content: 'Sorry, I encountered an error processing your request.',
+        content: errorMessage,
         timestamp: new Date()
       }]);
     } finally {
@@ -90,7 +110,7 @@ const ChatContainer = () => {
       
       if (response.audio_url) {
         setTimeout(() => {
-          setCurrentAudio(`http://localhost:8000${response.audio_url}`);
+          setCurrentAudio(`${BACKEND_URL}${response.audio_url}`);
         }, 1000);
       }
     } catch (error) {
