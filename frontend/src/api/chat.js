@@ -7,14 +7,21 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ||
 console.log('Environment:', import.meta.env.MODE);
 console.log('API Base URL:', API_BASE_URL);
 
-export const sendMessage = async (message, audioEnabled = false) => {
+export const sendMessage = async (message, patientId = null) => {
   try {
     console.log('Sending request to:', `${API_BASE_URL}/chat/send`);
+    console.log('Patient ID:', patientId || 'using backend default');
+
+    const requestBody = {
+      message: message
+    };
+
+    // Only include patient_id if explicitly provided
+    if (patientId) {
+      requestBody.patient_id = String(patientId);
+    }
     
-    const response = await axios.post(`${API_BASE_URL}/chat/send`, {
-      message: message,
-      audio_enabled: audioEnabled
-    }, {
+    const response = await axios.post(`${API_BASE_URL}/chat/send`, requestBody, {
       headers: {
         'Content-Type': 'application/json',
       },

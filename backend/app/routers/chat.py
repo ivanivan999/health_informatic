@@ -96,12 +96,17 @@ def prepare_text_for_audio(formatted_response, text_response, response_length):
 # backend/app/routers/chat.py - Simplified version
 @router.post("/send", response_model=ChatResponse)
 async def send_message(request: ChatRequest, background_tasks: BackgroundTasks):
+    # Use provided patient_id or fall back to environment default
+    patient_id = request.patient_id or settings.DEFAULT_PATIENT_ID
+    
+    print(f"🏥 Processing request for Patient ID: {patient_id} {'(from URL)' if request.patient_id else '(default)'}")
+    
     start_time = time.time()
     print(f"🕐 REQUEST START: {request.message[:50]}...")
     try:
         # Step 1: Setup
         setup_start = time.time()
-        patient_id = settings.DEFAULT_PATIENT_ID
+        # patient_id = settings.DEFAULT_PATIENT_ID
         print(f"⚡ Setup completed in {(time.time() - setup_start)*1000:.0f}ms")
         
         # Step 2: Database Agent Call

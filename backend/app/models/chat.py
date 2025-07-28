@@ -8,8 +8,10 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
+    patient_id: Optional[str] = None
 
 class ChatResponse(BaseModel):
     message: str
     formatted_response: Optional[Dict[str, Any]] = None
     audio_url: Optional[str] = None 
+    patient_id: Optional[str] = None

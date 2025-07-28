@@ -43,7 +43,7 @@ class DatabaseAgent:
         # call gemini model
         llm = ChatGoogleGenerativeAI(model='gemini-2.5-flash',
                                     verbose=False,  # Disable verbose
-                                    temperature=0.1,  # Lower = faster
+                                    temperature=0.2,  # Lower = faster
                                     # max_tokens=1000,  # Limit output
                                     google_api_key=self.gemini_key)
         db = self.connect_db()
@@ -69,61 +69,58 @@ class DatabaseAgent:
             executed_query: str = ""
 
         # Route the query to the appropriate chain
-        # def determine_query_type(state: EnhancedMessagesState):
-        #     """Determine if the query is about patients or not."""
-        #     print("🚀 STEP 1: Determining query type")
-            
-        #     messages = state["messages"]
-        #     last_message = messages[-1]
-        #     query = last_message.content
-            
-        #     print(f"📝 User query: '{query}'")
-            
-        #     # Enhanced routing prompt
-        #     system_route_prompt = """You are a Health Informatics AI routing system. 
-
-        #     Analyze the user query and classify it into one of these categories:
-
-        #     1. Return "greeting" if the query is:
-        #     - Greetings (hello, hi, good morning, etc.)
-        #     - Farewells (goodbye, bye, see you later, etc.)
-        #     - Courtesy questions (how are you, thanks, etc.)
-        #     - General help requests (what can you do, who are you, help, etc.)
-
-        #     2. Return "list_tables" if the query is asking for:
-        #     - Patient treatment history, medications, or therapies
-        #     - Pathology results, lab results, or diagnostic reports  
-        #     - Patient registration details, contact info, or demographics
-        #     - Medical records, health data, or clinical information
-        #     - Specific patient data by ID or condition
-
-        #     3. Return "other" for any other queries that don't fit the above categories.
-
-        #     Query: "{query}"
-            
-        #     Respond with only one word: "greeting", "list_tables", or "other"
-        #     """
-
-        #     system_message = {
-        #         "role": "system",
-        #         "content": system_route_prompt,
-        #     }
-
-        #     response = llm.invoke([system_message, {"role": "user", "content": query}])
-            
-        #     if "list_tables" in response.content:
-        #         print("✅ Query classified as: PATIENT INFORMATION")
-        #         return {"messages": [AIMessage("list_tables")]}
-        #     elif "greeting" in response.content.lower():
-        #         print("✅ Query classified as: GREETING/GENERAL")
-        #         return {"messages": [AIMessage("greeting")]}
-        #     else:
-        #         print("❌ Query classified as: NON-PATIENT")
-        #         return {"messages": [AIMessage("other")]}
-
         def determine_query_type(state: EnhancedMessagesState):
-            """Skip classification - assume all queries are patient data queries"""
-            return {"messages": [AIMessage("list_tables")]}
+            """Determine if the query is about patients or not."""
+            print("🚀 STEP 1: Determining query type")
+            
+            messages = state["messages"]
+            last_message = messages[-1]
+            query = last_message.content
+            
+            print(f"📝 User query: '{query}'")
+            
+            # Enhanced routing prompt
+            system_route_prompt = """You are a Health Informatics AI routing system. 
+
+            Analyze the user query and classify it into one of these categories:
+
+            1. Return "greeting" if the query is:
+            - Greetings (hello, hi, good morning, etc.)
+            - Farewells (goodbye, bye, see you later, etc.)
+            - Courtesy questions (how are you, thanks, etc.)
+            - General help requests (what can you do, who are you, help, etc.)
+
+            2. Return "list_tables" if the query is asking for:
+            - Patient treatment history, medications, or therapies
+            - Pathology results, lab results, or diagnostic reports  
+            - Patient registration details, contact info, or demographics
+            - Medical records, health data, or clinical information
+            - Specific patient data by ID or condition
+
+            3. Return "other" for any other queries that don't fit the above categories.
+
+            Query: "{query}"
+            
+            Respond with only one word: "greeting", "list_tables", or "other"
+            """
+
+            system_message = {
+                "role": "system",
+                "content": system_route_prompt,
+            }
+
+            response = llm.invoke([system_message, {"role": "user", "content": query}])
+            
+            if "list_tables" in response.content:
+                print("✅ Query classified as: PATIENT INFORMATION")
+                return {"messages": [AIMessage("list_tables")]}
+            elif "greeting" in response.content.lower():
+                print("✅ Query classified as: GREETING/GENERAL")
+                return {"messages": [AIMessage("greeting")]}
+            else:
+                print("❌ Query classified as: NON-PATIENT")
+                return {"messages": [AIMessage("other")]}
+
 
         def route_query(state: EnhancedMessagesState) -> Literal[END, "list_tables","handle_greeting"]:
             """Route the query to the appropriate tool based on the last message."""

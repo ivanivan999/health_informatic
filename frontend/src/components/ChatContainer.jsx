@@ -12,10 +12,11 @@ const BACKEND_URL = API_BASE_URL.replace('/api/v1', ''); // Gets base backend UR
 
 
 
-const ChatContainer = () => {
+const ChatContainer = ({ patientId = null }) => {
   const [messages, setMessages] = useState([]);
   const [loading, setLoading] = useState(false);
   const [currentAudio, setCurrentAudio] = useState(null);
+  const [currentPatientId, setCurrentPatientId] = useState(patientId);
   
   const messagesEndRef = useRef(null);
 
@@ -23,6 +24,14 @@ const ChatContainer = () => {
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages]);
+
+  useEffect(() => {
+    if (patientId !== currentPatientId) {
+      setCurrentPatientId(patientId);
+      setMessages([]); // Clear chat history when patient changes
+      setCurrentAudio(null); // Clear any playing audio
+    }
+  }, [patientId, currentPatientId]);
 
   const handleSendMessage = async (text) => {
     if (!text.trim()) return;
@@ -38,7 +47,7 @@ const ChatContainer = () => {
     
     try {
       // Send to API and get response
-      const response = await sendMessage(text);
+      const response = await sendMessage(text, currentPatientId);
       
       // Add assistant message
       setMessages(prev => [...prev, { 
@@ -99,7 +108,7 @@ const ChatContainer = () => {
       ));
       
       // Now process like a regular message
-      const response = await sendMessage(transcription);
+      const response = await sendMessage(transcription,currentPatientId);
       
       setMessages(prev => [...prev, { 
         role: 'assistant', 
@@ -141,9 +150,9 @@ const ChatContainer = () => {
               <div className="example-prompts">
                 <div 
                   className="prompt-card"
-                  onClick={() => handlePromptClick("Show me treatment history for patient 132")}
+                  onClick={() => handlePromptClick("Show me treatment history")}
                 >
-                  <span>Show me treatment history for patient 132</span>
+                  <span>Show me treatment history</span>
                 </div>
                 <div 
                   className="prompt-card"
