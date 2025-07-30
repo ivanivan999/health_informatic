@@ -1,6 +1,7 @@
 from typing import Literal, Dict, List
 from langchain_community.utilities.sql_database import SQLDatabase
-from langchain_google_genai import ChatGoogleGenerativeAI
+# from langchain_google_genai import ChatGoogleGenerativeAI
+from langchain_openai import ChatOpenAI
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_core.messages import AIMessage
 from langgraph.graph import END, START, MessagesState, StateGraph
@@ -23,7 +24,8 @@ class DatabaseAgent:
         self.password = settings.DATABASE_PASSWORD
         self.database = settings.DATABASE_NAME
         self.patient_id = patient_id
-        self.gemini_key = gemini_key
+        # self.gemini_key = gemini_key
+        self.openai_key = settings.OPENAI_API_KEY
         self.question = question
 
     def connect_db(self):
@@ -41,11 +43,17 @@ class DatabaseAgent:
         # Step 1: LLM Setup
         llm_start = time.time()
         # call gemini model
-        llm = ChatGoogleGenerativeAI(model='gemini-2.5-flash',
-                                    verbose=False,  # Disable verbose
-                                    temperature=0.2,  # Lower = faster
-                                    # max_tokens=1000,  # Limit output
-                                    google_api_key=self.gemini_key)
+        # llm = ChatGoogleGenerativeAI(model='gemini-2.5-flash',
+        #                             verbose=False,  # Disable verbose
+        #                             temperature=0.2,  # Lower = faster
+        #                             # max_tokens=1000,  # Limit output
+        #                             google_api_key=self.gemini_key)
+        llm = ChatOpenAI(
+            model='gpt-4o',
+            temperature=0.2,  # Lower = faster
+            max_tokens=2000,  # Limit output
+            api_key=self.openai_key
+        )
         db = self.connect_db()
         print(f"⚡ LLM setup in {(time.time() - llm_start)*1000:.0f}ms")
     

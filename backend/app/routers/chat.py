@@ -4,20 +4,23 @@ import time
 import os
 import asyncio
 import boto3
-from google import genai
+# from google import genai
+from openai import OpenAI
 from app.core.config import settings
 from app.models.chat import ChatRequest, ChatResponse
 from app.services.database_agent import DatabaseAgent
 from app.services.llm_utilities import synthesize_speech, save_audio_file, transcribe_audio
 from fastapi.responses import FileResponse
-from google.genai import types
+# from google.genai import types
 import re
 import json
 
 router = APIRouter(prefix="/chat", tags=["chat"])
 
 # Initialize clients
-genai_client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+# genai_client = genai.Client(api_key=settings.GOOGLE_API_KEY)
+openai_client = OpenAI(api_key=settings.OPENAI_API_KEY)
+
 polly_client = boto3.client(
     'polly',
     aws_access_key_id=settings.AWS_ACCESS_KEY_ID,
@@ -112,7 +115,8 @@ async def send_message(request: ChatRequest, background_tasks: BackgroundTasks):
         # Step 2: Database Agent Call
         agent_start = time.time()
         print("🔍 Starting DatabaseAgent...")
-        database_agent = DatabaseAgent(patient_id, settings.GOOGLE_API_KEY, request.message)
+        # database_agent = DatabaseAgent(patient_id, settings.GOOGLE_API_KEY, request.message)
+        database_agent = DatabaseAgent(patient_id, openai_client, request.message)
         
         # Get response from database agent
         text_response, html_response = database_agent.create_agent()
@@ -165,7 +169,8 @@ async def send_message(request: ChatRequest, background_tasks: BackgroundTasks):
         response = ChatResponse(
             message=text_response,
             formatted_response=formatted_response,
-            audio_url=audio_url
+            audio_url=audio_url,
+            patient_id=patient_id,
         )
         
         if audio_success:
@@ -224,9 +229,10 @@ async def transcribe_voice(file: UploadFile = File(...)):
         # Transcribe using Gemini
         print(f"Transcribing audio file at: {temp_audio_path}")
         transcript = transcribe_audio(
-            gemini_client=genai_client,
+            openai_client=openai_client,
+            # gemini_client=genai_client,
             audio_path=temp_audio_path,
-            mime_type="audio/wav"
+            # mime_type="audio/wav"
         )
         print(f"Transcription result: {transcript}")
         

@@ -1,31 +1,36 @@
-# Copy the functions from your original llm_utilities.py
-from google.genai import types
-from google import genai
+import openai
+from typing import Optional
 
-# Gemini Client
-# Transcribe audio to text
-def transcribe_audio(gemini_client, audio_path, mime_type='audio/wav', show_debug=False):
-    with open(audio_path, "rb") as audio_file:
-        audio_bytes = audio_file.read()
+# OpenAI Client for audio transcription
+def transcribe_audio(openai_client, audio_path: str, model: str = "whisper-1", show_debug: bool = False):
+    """
+    Transcribe audio to text using OpenAI Whisper.
     
-    prompt = 'Generate a transcript of the speech.'
-    response = gemini_client.models.generate_content(
-                    model='gemini-2.0-flash',
-                    contents=[
-                        prompt,
-                        types.Part.from_bytes(
-                        data=audio_bytes,
-                        mime_type=mime_type,
-                        )
-                    ],
-                    config=types.GenerateContentConfig(
-                        max_output_tokens=1000,
-                        temperature=0,
-                        system_instruction="You are a helpful AI Assitant. Your job is transform the content of audio into text.",
-                    )
-                    
-                    )
-    return response.text
+    Parameters:
+    - openai_client: OpenAI client instance
+    - audio_path: Path to the audio file
+    - model: Whisper model to use (default: "whisper-1")
+    - show_debug: Whether to show debug information
+    
+    Returns:
+    - Transcribed text
+    """
+    try:
+        with open(audio_path, "rb") as audio_file:
+            transcript = openai_client.audio.transcriptions.create(
+                model=model,
+                file=audio_file,
+                response_format="text"
+            )
+        
+        if show_debug:
+            print(f"Transcription result: {transcript}")
+        
+        return transcript
+    
+    except Exception as e:
+        print(f"Error transcribing audio with OpenAI: {str(e)}")
+        return "Error: Could not transcribe audio"
 
 def synthesize_speech(polly_client, text, voice_id="Ruth", engine="neural", output_format="mp3", text_type="text"):
     """
@@ -60,7 +65,7 @@ def save_audio_file(audio_data, file_path):
     
     Parameters:
     - audio_data: The audio data to save
-    - filename: The name of the file to save to
+    - file_path: The path where to save the file
     """
     if audio_data:
         if not file_path.endswith(('.mp3', '.wav', '.ogg')):
@@ -70,5 +75,33 @@ def save_audio_file(audio_data, file_path):
             with open(file_path, 'wb') as file:
                 file.write(audio_data)
             print(f"Audio saved to {file_path}")
+            return True
         except Exception as e:
             print(f"Error saving audio file: {str(e)}")
+            return False
+    return False
+
+# Optional: OpenAI TTS function (alternative to AWS Polly)
+def synthesize_speech_openai(openai_client, text: str, voice: str = "alloy", model: str = "tts-1"):
+    """
+    Synthesize speech using OpenAI TTS (alternative to AWS Polly).
+    
+    Parameters:
+    - openai_client: OpenAI client instance
+    - text: The text to convert to speech
+    - voice: Voice to use (alloy, echo, fable, onyx, nova, shimmer)
+    - model: TTS model to use (tts-1 or tts-1-hd)
+    
+    Returns:
+    - Audio bytes
+    """
+    try:
+        response = openai_client.audio.speech.create(
+            model=model,
+            voice=voice,
+            input=text
+        )
+        return response.content
+    except Exception as e:
+        print(f"Error synthesizing speech with OpenAI: {str(e)}")
+        return None

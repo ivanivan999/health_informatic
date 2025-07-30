@@ -7,7 +7,8 @@ class Settings(BaseSettings):
     PROJECT_NAME: str = "Patient Informatics AI Assistant"
     
     # Google AI Configuration
-    GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
+    # GOOGLE_API_KEY: str = os.getenv("GOOGLE_API_KEY", "")
+    OPENAI_API_KEY: str = os.getenv("OPENAI_API_KEY", "")
     
     # AWS Configuration
     AWS_ACCESS_KEY_ID: str = os.getenv("AWS_ACCESS_KEY_ID", "")

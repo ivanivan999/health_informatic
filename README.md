@@ -1,20 +1,23 @@
 # Health Informatics AI Bot
 
-A full-stack AI-powered healthcare assistant application that enables natural language queries about patient data using Google's Gemini AI and advanced SQL database interaction with voice capabilities.
+A full-stack AI-powered healthcare assistant application that enables natural language queries about patient data using OpenAI GPT models and advanced SQL database interaction with voice capabilities.
 
 ## 🏥 Overview
 
-The Health Informatics AI Bot is an intelligent healthcare assistant that allows healthcare professionals to query patient information using natural language. The system automatically converts user questions into SQL queries, executes them against a MySQL database, and returns formatted results with both text and audio responses. The application features a modern ChatGPT-style interface with voice interaction capabilities.
+The Health Informatics AI Bot is an intelligent healthcare assistant that allows healthcare professionals to query patient information using natural language. The system automatically converts user questions into SQL queries, executes them against a MySQL database, and returns formatted results with both text and audio responses. The application features a modern ChatGPT-style interface with voice interaction capabilities and dynamic patient routing.
 
 ## ✨ Features
 
 - **Natural Language Processing**: Ask questions about patient data in plain English
-- **Intelligent SQL Generation**: Automatically converts natural language to SQL queries using Google Gemini 2.5 Flash
+- **Intelligent SQL Generation**: Automatically converts natural language to SQL queries using OpenAI GPT-4o
 - **Multi-format Responses**: Get results in text, HTML tables, and audio format
-- **Voice Interaction**: Record voice queries and receive spoken responses using AWS Polly
-- **Patient-Specific Queries**: Focused queries for specific patient information (default: Patient 143)
+- **Voice Interaction**: Record voice queries and receive spoken responses
+  - OpenAI Whisper for speech-to-text transcription
+  - AWS Polly for text-to-speech synthesis
+- **Dynamic Patient Routing**: URL-based patient selection with `/patient/:patientId` routing
+- **Patient-Specific Queries**: Focused queries for any patient ID (default: Patient 143)
 - **Data Validation**: Built-in SQL query validation and error checking with LangGraph
-- **Responsive UI**: Modern ChatGPT-style interface with React
+- **Responsive UI**: Modern ChatGPT-style interface with React Router
 - **Smart Routing**: Handles greetings, patient queries, and general questions intelligently
 - **Table Visualization**: Advanced table modal with patient cards and detailed views
 
@@ -22,16 +25,17 @@ The Health Informatics AI Bot is an intelligent healthcare assistant that allows
 
 ### Backend (FastAPI)
 - **Framework**: FastAPI with Python 3.12+
-- **AI Integration**: Google Gemini 2.5 Flash model via LangChain
+- **AI Integration**: OpenAI GPT-4o model via LangChain
 - **Database**: MySQL with LangGraph for query orchestration
 - **Audio Processing**: 
   - AWS Polly for text-to-speech synthesis
-  - Google Gemini for speech-to-text transcription
+  - OpenAI Whisper for speech-to-text transcription
 - **API Structure**: RESTful endpoints with async support
 - **Deployment**: Vercel-ready with production configuration
 
 ### Frontend (React + Vite)
 - **Framework**: React 19 with Vite build tool
+- **Routing**: React Router 6.30.1 for dynamic patient URLs
 - **UI Components**: 
   - ChatGPT-style chat interface
   - Advanced table modals with patient cards
@@ -84,7 +88,7 @@ health_informatic/
 │   │   ├── styles/
 │   │   │   ├── main.css            # Main application styles
 │   │   │   └── chat.css            # Chat-specific styles
-│   │   └── App.jsx                 # Main React component
+│   │   └── App.jsx                 # Main React component with routing
 │   ├── package.json               # Node.js dependencies
 │   └── vite.config.js             # Vite configuration
 ├── vercel.json                    # Vercel deployment configuration
@@ -98,7 +102,7 @@ health_informatic/
 - Python 3.12+
 - Node.js 18+
 - MySQL database access
-- Google API key for Gemini AI
+- OpenAI API key
 - AWS credentials for Polly (for audio features)
 
 ### Environment Configuration
@@ -106,8 +110,8 @@ health_informatic/
 Create a `.env` file in the [`backend`](backend) directory using [`backend/.env.example`](backend/.env.example) as a template:
 
 ```env
-# Google AI Configuration
-GOOGLE_API_KEY=your_google_api_key_here
+# OpenAI Configuration (Primary AI Provider)
+OPENAI_API_KEY=your_openai_api_key_here
 
 # AWS Configuration
 AWS_ACCESS_KEY_ID=your_aws_access_key_here
@@ -140,6 +144,7 @@ DEFAULT_PATIENT_ID=143
 
 2. **Access the application**:
    - Frontend: `http://localhost:3000`
+   - Patient-specific: `http://localhost:3000/patient/143`
    - Backend API: `http://localhost:8000`
    - API Documentation: `http://localhost:8000/docs`
 
@@ -170,7 +175,7 @@ The core [`DatabaseAgent`](backend/app/services/database_agent.py) handles the c
 
 - **Query Classification**: Determines if query is greeting, patient data, or other
 - **Schema Introspection**: Analyzes database structure dynamically
-- **SQL Generation**: Uses Gemini 2.5 Flash for natural language to SQL conversion
+- **SQL Generation**: Uses OpenAI GPT-4o for natural language to SQL conversion
 - **Query Validation**: Multi-step validation process
 - **Result Formatting**: Converts raw data to user-friendly JSON with summaries
 - **Error Recovery**: Graceful handling of edge cases
@@ -186,11 +191,19 @@ The core [`DatabaseAgent`](backend/app/services/database_agent.py) handles the c
 
 ### Frontend Components
 
-- **[`ChatContainer`](frontend/src/components/ChatContainer.jsx)**: Main interface with ChatGPT-style layout
+- **[`App.jsx`](frontend/src/App.jsx)**: Main application with React Router setup
+- **[`ChatContainer`](frontend/src/components/ChatContainer.jsx)**: Patient-aware chat interface
 - **[`ChatInput`](frontend/src/components/ChatInput.jsx)**: Voice/text input with recording indicators
 - **[`FormattedResponse`](frontend/src/components/FormattedResponse.jsx)**: Handles table data with summary-first approach
 - **[`TableModal`](frontend/src/components/TableModal.jsx)**: Advanced patient data visualization
 - **[`AudioPlayer`](frontend/src/components/AudioPlayer.jsx)**: Auto-playing audio responses
+
+### Routing System
+
+- **Default Route** (`/`): Uses `DEFAULT_PATIENT_ID` from environment
+- **Patient-Specific Route** (`/patient/:patientId`): Dynamic patient selection
+- **URL-based Patient Context**: Automatically extracts patient ID from URL parameters
+- **Patient Header Display**: Shows current patient ID in chat interface
 
 ## 🛡️ Security Features
 
@@ -199,16 +212,30 @@ The core [`DatabaseAgent`](backend/app/services/database_agent.py) handles the c
 - **CORS Configuration**: Proper cross-origin request handling for Vercel
 - **Error Handling**: Graceful error responses without exposing sensitive data
 - **Environment Variables**: Secure configuration management
+- **Patient Data Isolation**: Queries automatically filtered by patient ID
 
 ## 🎯 Usage Examples
+
+### URL-Based Patient Access
+
+```
+# Access specific patient data
+https://your-app.vercel.app/patient/143
+https://your-app.vercel.app/patient/245
+https://your-app.vercel.app/patient/789
+
+# Default patient (uses DEFAULT_PATIENT_ID)
+https://your-app.vercel.app/
+```
 
 ### Supported Query Types
 
 **Patient Information Queries:**
-- "Show me treatment history for patient 132"
+- "Show me treatment history for this patient"
 - "What are the pathology results?"
 - "Get patient registration details"
 - "What medications is the patient taking?"
+- "Show recent lab results"
 
 **Greeting and Help:**
 - "Hello" / "Hi" / "Good morning"
@@ -217,7 +244,7 @@ The core [`DatabaseAgent`](backend/app/services/database_agent.py) handles the c
 
 **Voice Queries:**
 - Click microphone button to record
-- Automatic transcription with Gemini
+- Automatic transcription with OpenAI Whisper
 - Audio responses with AWS Polly
 
 ## 🔄 API Endpoints
@@ -230,7 +257,8 @@ POST /api/v1/chat/send
 **Request Body**:
 ```json
 {
-  "message": "Show me patient treatment history"
+  "message": "Show me patient treatment history",
+  "patient_id": "143"
 }
 ```
 
@@ -245,14 +273,15 @@ POST /api/v1/chat/send
     "key_insights": [...],
     "record_count": 24
   },
-  "audio_url": "/api/v1/chat/audio/temp_audio_output_123.mp3"
+  "audio_url": "/api/v1/chat/audio/temp_audio_output_123.mp3",
+  "patient_id": "143"
 }
 ```
 
 ```
 POST /api/v1/chat/transcribe
 ```
-Upload audio file for transcription using Gemini AI.
+Upload audio file for transcription using OpenAI Whisper.
 
 ```
 GET /api/v1/chat/audio/{filename}
@@ -279,13 +308,15 @@ npm run preview    # Preview build
 ### Code Style
 - **Backend**: Python with FastAPI best practices
 - **Frontend**: React 19 with modern hooks and functional components
+- **Routing**: React Router for SPA navigation
 - **Styling**: CSS modules with ChatGPT-inspired design
 
 ## 📚 Key Dependencies
 
 ### Backend Dependencies
 - `fastapi>=0.104.0`: Web framework
-- `langchain-google-genai>=0.0.3`: Google AI integration
+- `openai>=1.0.0`: OpenAI API integration
+- `langchain-openai>=0.0.1`: LangChain OpenAI integration
 - `langgraph>=0.0.17`: Query orchestration and state management
 - `pymysql>=1.1.0`: MySQL database connector
 - `boto3>=1.28.0`: AWS services integration
@@ -293,6 +324,7 @@ npm run preview    # Preview build
 
 ### Frontend Dependencies
 - `react`: ^19.1.0 - UI framework
+- `react-router-dom`: ^6.30.1 - Client-side routing
 - `axios`: ^1.10.0 - HTTP client
 - `recordrtc`: ^5.6.2 - Audio recording
 - `react-markdown`: ^10.1.0 - Markdown rendering
@@ -306,18 +338,25 @@ npm run preview    # Preview build
    - Verify database credentials in [`backend/app/core/config.py`](backend/app/core/config.py)
    - Check if MySQL server is accessible
 
-2. **Google API Key Issues**
-   - Ensure API key has Gemini AI access enabled
-   - Check quota limits in Google Cloud Console
+2. **OpenAI API Key Issues**
+   - Ensure API key has GPT-4o access enabled
+   - Check usage limits in OpenAI dashboard
+   - Verify key is set in environment variables
 
 3. **Audio Features Not Working**
    - Verify AWS credentials for Polly service
    - Check browser microphone permissions
    - Ensure audio directory exists in backend
 
-4. **Vercel Deployment Issues**
+4. **Patient Routing Issues**
+   - Check React Router configuration in [`App.jsx`](frontend/src/App.jsx)
+   - Verify patient ID parameter handling
+   - Ensure backend receives patient_id correctly
+
+5. **Vercel Deployment Issues**
    - Check environment variables are set in Vercel dashboard
    - Verify [`vercel.json`](vercel.json) configuration
+   - Ensure OpenAI API key is properly configured
 
 ## 📦 Deployment
 
@@ -332,13 +371,22 @@ The project includes [`vercel.json`](vercel.json) for seamless deployment:
 ### Environment Variables for Production
 
 Set these in your Vercel dashboard:
-- `GOOGLE_API_KEY`
+- `OPENAI_API_KEY` (Primary AI provider)
 - `AWS_ACCESS_KEY_ID`
 - `AWS_SECRET_ACCESS_KEY`
 - `DATABASE_HOST`
 - `DATABASE_USER`
 - `DATABASE_PASSWORD`
 - `DATABASE_NAME`
+- `DEFAULT_PATIENT_ID`
+
+## 🔄 Migration Notes
+
+This application has been migrated from Google Gemini AI to OpenAI:
+- **SQL Generation**: Now uses OpenAI GPT-4o instead of Gemini 2.5 Flash
+- **Speech Recognition**: Migrated from Google Speech-to-Text to OpenAI Whisper
+- **Performance**: Improved response consistency and reliability
+- **Cost Optimization**: Better token usage and rate limiting
 
 ## 📄 License
 
@@ -350,8 +398,17 @@ This project is licensed under the MIT License - see the [`LICENSE`](LICENSE) fi
 2. Create a feature branch
 3. Make your changes
 4. Test both frontend and backend
-5. Submit a pull request
+5. Test patient routing functionality
+6. Submit a pull request
 
 ---
 
 **Note**: This application is designed for educational and demonstration purposes in health informatics. Ensure proper security measures and compliance with healthcare regulations (HIPAA, etc.) before using in production environments.
+
+## 🆕 Recent Updates
+
+- ✅ **OpenAI Migration**: Complete migration from Google Gemini to OpenAI GPT-4o
+- ✅ **Dynamic Patient Routing**: URL-based patient selection with React Router
+- ✅ **Enhanced Voice Features**: OpenAI Whisper integration for transcription
+- ✅ **Improved Performance**: Optimized query processing and response formatting
+- ✅ **Better Error Handling**: Enhanced error recovery and user feedback
