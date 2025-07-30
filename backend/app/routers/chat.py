@@ -116,7 +116,7 @@ async def send_message(request: ChatRequest, background_tasks: BackgroundTasks):
         agent_start = time.time()
         print("🔍 Starting DatabaseAgent...")
         # database_agent = DatabaseAgent(patient_id, settings.GOOGLE_API_KEY, request.message)
-        database_agent = DatabaseAgent(patient_id, openai_client, request.message)
+        database_agent = DatabaseAgent(patient_id, settings.OPENAI_API_KEY, request.message)
         
         # Get response from database agent
         text_response, html_response = database_agent.create_agent()

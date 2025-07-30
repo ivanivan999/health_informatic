@@ -133,6 +133,41 @@ const FormattedResponse = ({ response }) => {
         <ReactMarkdown>{response.content || ''}</ReactMarkdown>
       </div>
   }
+
+  // Handle no_data responses
+  if (response.type === "no_data") {
+    return (
+      <div className="no-data-response">
+        <div className="summary-section">
+          <h4>🔍 Search Results</h4>
+          <p className="summary-text">{response.summary}</p>
+          
+          {response.data_source && (
+            <div className="data-source">
+              <strong>Tables Searched:</strong> {response.data_source}
+            </div>
+          )}
+          
+          {response.key_insights && response.key_insights.length > 0 && (
+            <div className="key-insights">
+              <strong>Suggestions:</strong>
+              <ul>
+                {response.key_insights.map((insight, index) => (
+                  <li key={index}>{insight}</li>
+                ))}
+              </ul>
+            </div>
+          )}
+          
+          {response.explanation && (
+            <div className="explanation">
+              <p>{response.explanation}</p>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
   
   if (response.type === "table" || response.type === "table_data") {
     return <TableDisplay 

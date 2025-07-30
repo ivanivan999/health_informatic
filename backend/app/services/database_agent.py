@@ -1,6 +1,4 @@
 from typing import Literal, Dict, List
-from langchain_community.utilities.sql_database import SQLDatabase
-# from langchain_google_genai import ChatGoogleGenerativeAI
 from langchain_openai import ChatOpenAI
 from langchain_community.agent_toolkits import SQLDatabaseToolkit
 from langchain_core.messages import AIMessage
@@ -14,26 +12,20 @@ from datetime import datetime, date
 import ast
 import time
 from app.core.config import settings
+from app.core.database import db_manager
 
 class DatabaseAgent:
-    def __init__(self, patient_id, gemini_key, question):
-        # Use environment variables from settings
-        self.host = settings.DATABASE_HOST
-        self.port = settings.DATABASE_PORT
-        self.user = settings.DATABASE_USER
-        self.password = settings.DATABASE_PASSWORD
-        self.database = settings.DATABASE_NAME
+    def __init__(self, patient_id, openai_key, question):
         self.patient_id = patient_id
-        # self.gemini_key = gemini_key
-        self.openai_key = settings.OPENAI_API_KEY
+        self.openai_key = openai_key
         self.question = question
 
-    def connect_db(self):
+    def get_database(self):
+        """Get shared database connection from pool"""
         db_start = time.time()
-        mysql_uri = f"mysql+pymysql://{self.user}:{self.password}@{self.host}:{self.port}/{self.database}"
-        db = SQLDatabase.from_uri(mysql_uri)
+        db = db_manager.get_database()
         db_duration = time.time() - db_start
-        print(f"🗄️ Database connection in {db_duration*1000:.0f}ms")
+        print(f"🗄️ Database retrieved from pool in {db_duration*1000:.0f}ms")
         return db
 
     def create_agent(self):
@@ -54,7 +46,7 @@ class DatabaseAgent:
             max_tokens=2000,  # Limit output
             api_key=self.openai_key
         )
-        db = self.connect_db()
+        db = self.get_database()
         print(f"⚡ LLM setup in {(time.time() - llm_start)*1000:.0f}ms")
     
         # Step 2: Toolkit Setup
@@ -438,22 +430,10 @@ class DatabaseAgent:
             # Skip validation step entirely
             return "run_query_with_schema"
 
-        def should_continue_after_query(state: EnhancedMessagesState) -> Literal[END, "format_query_results"]:
-            """Decide what to do after running the query"""
-            print("🚀 STEP 8: Checking if results need formatting")
-            
-            messages = state["messages"]
-            last_message = messages[-1]
-            
-            content = last_message.content if hasattr(last_message, "content") else ""
-            print(f"📋 Checking content: {content[:100]}...")
-            
-            if "[(" in content and ")]" in content:
-                print("✅ Found tuple data - proceeding to format")
-                return "format_query_results"
-            else:
-                print("❌ No tuple data found - going to END")
-                return END
+        def should_continue_after_query(state: EnhancedMessagesState) -> Literal["format_query_results"]:
+            """Always format results, whether empty or not"""
+            print("🚀 STEP 8: Always proceeding to format results")
+            return "format_query_results"
 
         def format_query_results(state: EnhancedMessagesState):
             """Let LLM format query results with summary-first approach"""
@@ -473,7 +453,7 @@ class DatabaseAgent:
                 content = last_message.content.strip()
                 print(f"📊 Raw query result: {content[:200]}...")
                 
-                # Let LLM create both summary and detailed data
+                # Enhanced LLM prompt to handle both data and empty results
                 format_system_prompt = f"""
                 You are a health informatics assistant helping doctors analyze patient data. You have received raw query results from a database.
                 
@@ -483,11 +463,41 @@ class DatabaseAgent:
                 Query executed: {executed_query}
                 Tables queried: {', '.join(selected_tables)}
                 
-                Your task is to create a user-friendly response with two parts:
-                1. A brief summary that doctors can quickly read
-                2. Detailed table data that can be viewed on demand
+                IMPORTANT: Check if the query result is empty or contains no data (empty list [], no tuples, etc.)
+                
+                If NO DATA is found:
+                - Create a helpful "no data found" message
+                - Explain which tables were searched
+                - Suggest possible reasons (patient has no records, wrong patient ID, etc.)
+                - Set type to "no_data"
+                
+                If DATA is found:
+                - Create a user-friendly response with summary and detailed data
+                - Set type to "table_data"
                 
                 Return a JSON object with this structure:
+                
+                For NO DATA FOUND:
+                {{
+                    "type": "no_data",
+                    "summary": "I searched the [table names] for patient {self.patient_id} but found no matching records.",
+                    "data_source": "Tables searched: [table names]",
+                    "record_count": 0,
+                    "key_insights": [
+                        "No records found for patient ID {self.patient_id}",
+                        "This could mean the patient has no data in these tables",
+                        "Try searching in other areas or verify the patient ID"
+                    ],
+                    "data": [],
+                    "table_html": "<p>No data found in the searched tables.</p>",
+                    "explanation": "The search query found no matching records in the specified table(s).",
+                    "schema_info": {{
+                        "tables": {selected_tables},
+                        "query": "{executed_query}"
+                    }}
+                }}
+                
+                For DATA FOUND:
                 {{
                     "type": "table_data",
                     "summary": "Brief, conversational summary of findings (2-3 sentences)",
@@ -503,20 +513,13 @@ class DatabaseAgent:
                     }}
                 }}
                 
-                Guidelines for summary:
-                - Start with "I found [X] records in the [table name] showing..."
-                - Mention date ranges, key treatments, or notable patterns
-                - Keep it conversational and doctor-friendly
-                - Highlight any important medical findings
-                
-                Guidelines for data processing:
-                - Convert datetime objects to readable date strings (YYYY-MM-DD format)
-                - Handle None/null values as "N/A" or appropriate empty values
-                - Use clear, readable column names (Treatment, Date, Disease Type, etc.)
-                - Each row should be an object with consistent keys
-                - Sort by date if applicable
-                
-                Example summary: "I found 24 treatment records in the patients_treatment table spanning from June 2023 to April 2024. The patient has received various treatments including medications like Ibuprofen and Aspirin for chronic pain, as well as specialized treatments for cardiovascular conditions."
+                Guidelines:
+                - Always be helpful and informative
+                - For empty results, be clear about what was searched
+                - For data results, provide meaningful medical insights
+                - Use conversational, doctor-friendly language
+                - Convert dates to readable format (YYYY-MM-DD)
+                - Handle None/null values appropriately
                 
                 IMPORTANT: Return ONLY the JSON object, no markdown formatting, no code blocks, no extra text.
                 """
@@ -562,35 +565,42 @@ class DatabaseAgent:
                     if "data" not in parsed_json:
                         parsed_json["data"] = []
                     if "summary" not in parsed_json:
-                        parsed_json["summary"] = f"Found data in {', '.join(selected_tables)} table(s)"
+                        if parsed_json.get("type") == "no_data":
+                            parsed_json["summary"] = f"No data found for patient {self.patient_id} in {', '.join(selected_tables)} table(s)"
+                        else:
+                            parsed_json["summary"] = f"Found data in {', '.join(selected_tables)} table(s)"
                     if "schema_info" not in parsed_json:
                         parsed_json["schema_info"] = {
                             "tables": selected_tables,
                             "query": executed_query
                         }
                     
-                    # Create HTML table if not provided
-                    if "table_html" not in parsed_json and parsed_json["data"]:
-                        df = pd.DataFrame(parsed_json["data"])
-                        parsed_json["table_html"] = df.to_html(classes="table table-striped", index=False)
-                        parsed_json["html"] = parsed_json["table_html"]  # For frontend compatibility
+                    # Create HTML table if not provided and data exists
+                    if "table_html" not in parsed_json:
+                        if parsed_json["data"]:
+                            df = pd.DataFrame(parsed_json["data"])
+                            parsed_json["table_html"] = df.to_html(classes="table table-striped", index=False)
+                            parsed_json["html"] = parsed_json["table_html"]  # For frontend compatibility
+                        else:
+                            parsed_json["table_html"] = "<p>No data found in the searched tables.</p>"
+                            parsed_json["html"] = parsed_json["table_html"]
                     
                     # Add record count if not provided
-                    if "record_count" not in parsed_json and parsed_json["data"]:
-                        parsed_json["record_count"] = len(parsed_json["data"])
+                    if "record_count" not in parsed_json:
+                        parsed_json["record_count"] = len(parsed_json["data"]) if parsed_json["data"] else 0
                     
                     formatted_result = json.dumps(parsed_json)
-                    print("✅ Successfully formatted with LLM summary")
+                    print("✅ Successfully formatted with LLM (handles both data and no-data cases)")
                     
                 except json.JSONDecodeError as e:
                     print(f"⚠️ LLM response was not valid JSON: {str(e)}")
                     print(f"🔍 Problematic content: {cleaned_response[:500]}...")
-                    # Fallback structure with basic summary
+                    # Fallback structure
                     formatted_result = json.dumps({
-                        "type": "table_data",
-                        "summary": f"Found data in {', '.join(selected_tables)} table(s) for patient {self.patient_id}",
+                        "type": "no_data",
+                        "summary": f"I searched the {', '.join(selected_tables)} table(s) for patient {self.patient_id} but encountered an issue processing the results.",
                         "data_source": f"Tables: {', '.join(selected_tables)}",
-                        "record_count": "Multiple records",
+                        "record_count": 0,
                         "content": cleaned_response,
                         "original_query": executed_query,
                         "tables": selected_tables,
@@ -602,10 +612,10 @@ class DatabaseAgent:
                 
             except Exception as e:
                 print(f"❌ Error in LLM formatting: {str(e)}")
-                # Simple fallback with summary
+                # Simple fallback with no-data message
                 formatted_result = json.dumps({
-                    "type": "table_data", 
-                    "summary": f"Found data for patient {self.patient_id} in {', '.join(selected_tables)} table(s)",
+                    "type": "no_data", 
+                    "summary": f"I searched the {', '.join(selected_tables)} table(s) for patient {self.patient_id} but encountered an error.",
                     "data_source": f"Tables: {', '.join(selected_tables)}",
                     "content": f"Query result: {content}",
                     "error": f"Formatting error: {str(e)}"
@@ -677,6 +687,9 @@ class DatabaseAgent:
                 if parsed_content.get("type") == "table_data":
                     print("✅ Returning table data")
                     return final_message.content, parsed_content["table_html"]
+                elif parsed_content.get("type") == "no_data":
+                    print("✅ Returning no data response")
+                    return final_message.content, parsed_content.get("table_html", "<p>No data found</p>")
                 elif parsed_content.get("type") == "single_column":
                     print("✅ Returning single column data")
                     return parsed_content["text"], parsed_content["html"]
